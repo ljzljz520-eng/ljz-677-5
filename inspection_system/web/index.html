@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>车辆年检记录上报系统</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>🚗 车辆年检记录上报系统</h1>
+    <p class="sub">导入车牌 / 车架号 / 检测结果 / 机构 / 日期 · 后端分批校验并提交监管接口 · 超时重试 · 异常列表 · 汇总持久化</p>
+  </header>
+
+  <nav>
+    <button class="tab active" data-tab="import">① 导入上报</button>
+    <button class="tab" data-tab="batches">② 批次管理</button>
+    <button class="tab" data-tab="exceptions">③ 异常列表</button>
+    <button class="tab" data-tab="report">④ 汇总报告</button>
+  </nav>
+
+  <main>
+    <!-- 导入 -->
+    <section id="tab-import" class="panel active">
+      <div class="card">
+        <h2>导入记录</h2>
+        <p class="hint">支持 CSV（表头：车牌,车架号,检测结果,机构,日期）或 JSON。导入后请依次执行“分批校验”→“提交监管接口”。</p>
+        <input type="file" id="file" accept=".csv,.json">
+        <div class="row">
+          <button id="btn-import" class="primary">导入文件</button>
+          <button id="btn-validate">分批校验</button>
+          <button id="btn-process" class="primary">提交监管接口</button>
+          <button id="btn-retry">重试超时批次</button>
+          <button id="btn-save-report">生成并保存报告</button>
+        </div>
+        <pre id="import-output" class="output">等待操作…</pre>
+      </div>
+    </section>
+
+    <!-- 批次 -->
+    <section id="tab-batches" class="panel">
+      <div class="card">
+        <div class="row space-between">
+          <h2>批次列表</h2>
+          <button id="btn-refresh-batches">刷新</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>ID</th><th>批次号</th><th>状态</th><th>总数</th><th>接收</th>
+              <th>驳回</th><th>尝试次数</th><th>最近错误</th><th>更新时间</th>
+            </tr></thead>
+            <tbody id="batches-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 异常 -->
+    <section id="tab-exceptions" class="panel">
+      <div class="card">
+        <div class="row space-between">
+          <h2>异常列表</h2>
+          <select id="exc-filter">
+            <option value="">全部类型</option>
+            <option value="validation_error">字段校验错误</option>
+            <option value="duplicate">重复记录</option>
+            <option value="business_reject">监管业务驳回</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>ID</th><th>类型</th><th>车牌</th><th>车架号</th><th>机构</th>
+              <th>日期</th><th>错误详情</th><th>来源行</th>
+            </tr></thead>
+            <tbody id="exc-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- 报告 -->
+    <section id="tab-report" class="panel">
+      <div class="card">
+        <div class="row space-between">
+          <h2>汇总报告</h2>
+          <div>
+            <button id="btn-refresh-report">刷新</button>
+            <button id="btn-gen-report" class="primary">生成快照（写库）</button>
+          </div>
+        </div>
+        <div id="report-cards" class="stat-grid"></div>
+        <div class="row charts">
+          <div><h3>记录状态</h3><pre id="report-status" class="output small"></pre></div>
+          <div><h3>检测结果分布</h3><pre id="report-result" class="output small"></pre></div>
+          <div><h3>异常类型分布</h3><pre id="report-error" class="output small"></pre></div>
+          <div><h3>机构分布(Top)</h3><pre id="report-org" class="output small"></pre></div>
+        </div>
+        <h3>历史快照（已持久化到 report_snapshots）</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ID</th><th>生成时间(UTC)</th><th>导入</th><th>已提交</th>
+            <th>驳回</th><th>异常</th><th>超时批次</th></tr></thead>
+            <tbody id="snap-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>零第三方依赖 · Python 标准库 + SQLite · 数据持久化于 <code>data/inspection.db</code></footer>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+# 本项目仅依赖 Python 3.10+ 标准库，无需安装任何第三方包。
+# 开发/运行均使用内置 sqlite3、http.server、urllib、csv、concurrent.futures。

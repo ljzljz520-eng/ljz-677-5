@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>车辆年检记录上报系统</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #f0f2f5; color: #333; }
+  header { background: #1f3a5f; color: #fff; padding: 14px 24px; display: flex; align-items: center; gap: 24px; }
+  header h1 { font-size: 18px; }
+  .stat { font-size: 13px; background: rgba(255,255,255,.15); padding: 4px 10px; border-radius: 12px; }
+  nav { background: #fff; padding: 0 24px; border-bottom: 1px solid #ddd; display: flex; gap: 4px; }
+  nav button { border: none; background: none; padding: 12px 18px; cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; }
+  nav button.active { color: #1f3a5f; border-bottom-color: #1f3a5f; font-weight: bold; }
+  main { padding: 20px 24px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+  .card { background: #fff; border-radius: 8px; padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  textarea { width: 100%; height: 140px; font-family: monospace; font-size: 13px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 10px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; }
+  th { background: #fafafa; color: #666; font-weight: 600; }
+  .btn { background: #1f3a5f; color: #fff; border: none; padding: 7px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; margin-right: 6px; }
+  .btn:hover { background: #2c5282; }
+  .btn.small { padding: 3px 10px; font-size: 12px; }
+  .btn.warn { background: #b7791f; } .btn.gray { background: #718096; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; color: #fff; }
+  .PENDING { background: #a0aec0; } .SUCCESS { background: #38a169; } .PARTIAL { background: #d69e2e; }
+  .TIMEOUT { background: #dd6b20; } .FAILED { background: #e53e3e; } .INVALID { background: #e53e3e; }
+  .SUBMITTED { background: #38a169; } .OPEN { background: #e53e3e; } .RESOLVED { background: #38a169; }
+  .VALIDATION { background: #805ad5; } .BUSINESS { background: #d69e2e; }
+  .msg { margin-top: 10px; padding: 10px; border-radius: 4px; font-size: 13px; display: none; white-space: pre-wrap; }
+  .msg.ok { display: block; background: #c6f6d5; color: #22543d; }
+  .msg.err { display: block; background: #fed7d7; color: #742a2a; }
+  .row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+  input[type=text], input[type=date] { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
+  .hint { font-size: 12px; color: #888; margin: 6px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🚗 车辆年检记录上报系统</h1>
+  <span class="stat" id="stBatches">批次 0</span>
+  <span class="stat" id="stTimeout">超时 0</span>
+  <span class="stat" id="stExc">待处理异常 0</span>
+  <span class="stat" id="stReports">报告 0</span>
+</header>
+<nav>
+  <button class="active" data-tab="import">数据导入</button>
+  <button data-tab="batches">批次管理</button>
+  <button data-tab="exceptions">异常列表</button>
+  <button data-tab="reports">报告汇总</button>
+</nav>
+<main>
+  <!-- 导入 -->
+  <section class="panel active" id="tab-import">
+    <div class="card">
+      <h3>导入年检记录（CSV）</h3>
+      <p class="hint">列顺序：车牌,车架号,检测结果,机构代码,检测日期　　支持首行表头；机构示例：JG1001/JG1002/JG1003</p>
+      <div class="row">
+        <input type="file" id="csvFile" accept=".csv,.txt">
+        <button class="btn gray" onclick="fillSample()">填入示例数据</button>
+      </div>
+      <textarea id="csvText" placeholder="京A12345,LFV2A21K8C3000001,合格,JG1001,2026-09-20"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" onclick="importCsv()">导入并创建批次</button>
+      </div>
+      <div class="msg" id="importMsg"></div>
+    </div>
+  </section>
+
+  <!-- 批次 -->
+  <section class="panel" id="tab-batches">
+    <div class="card">
+      <div class="row"><button class="btn" onclick="loadBatches()">刷新</button></div>
+      <table id="batchTable"><thead><tr>
+        <th>ID</th><th>批次号</th><th>状态</th><th>总数</th><th>成功</th><th>失败</th><th>待提交</th><th>重试次数</th><th>创建时间</th><th>操作</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+    <div class="card" id="recordCard" style="display:none">
+      <h3 id="recordTitle">批清明细</h3>
+      <table id="recordTable"><thead><tr>
+        <th>ID</th><th>车牌</th><th>车架号</th><th>结果</th><th>机构</th><th>检测日期</th><th>状态</th><th>错误信息</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+
+  <!-- 异常 -->
+  <section class="panel" id="tab-exceptions">
+    <div class="card">
+      <div class="row">
+        <button class="btn" onclick="loadExceptions()">刷新</button>
+        <label class="hint"><input type="checkbox" id="onlyOpen" checked onchange="loadExceptions()"> 仅看待处理</label>
+      </div>
+      <table id="excTable"><thead><tr>
+        <th>ID</th><th>类型</th><th>批次号</th><th>车牌</th><th>车架号</th><th>错误信息</th><th>状态</th><th>时间</th><th>操作</th>
+      </tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+
+  <!-- 报告 -->
+  <section class="panel" id="tab-reports">
+    <div class="card">
+      <div class="row">
+        <input type="date" id="reportDate">
+        <button class="btn" onclick="genReport()">生成日汇总报告</button>
+        <button class="btn gray" onclick="loadReports()">刷新列表</button>
+      </div>
+      <p class="hint">批次报告在每次提交后自动写入；日汇总报告按 检测日期+机构 聚合，均持久化到数据库 report_summaries 表。</p>
+      <table id="reportTable"><thead><tr>
+        <th>ID</th><th>类型</th><th>键</th><th>日期</th><th>机构</th><th>总数</th><th>成功</th><th>失败</th><th>异常数</th><th>更新时间</th>
+      </tr></thead><tbody></tbody></table>
+      <div class="msg" id="reportMsg"></div>
+    </div>
+  </section>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const api = async (url, opts) => {
+  const r = await fetch(url, opts);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+};
+const tag = s => `<span class="tag ${s}">${s}</span>`;
+
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  $('#tab-' + b.dataset.tab).classList.add('active');
+  if (b.dataset.tab === 'batches') loadBatches();
+  if (b.dataset.tab === 'exceptions') loadExceptions();
+  if (b.dataset.tab === 'reports') loadReports();
+});
+
+function showMsg(el, text, ok) {
+  el.textContent = text; el.className = 'msg ' + (ok ? 'ok' : 'err');
+}
+
+async function refreshStats() {
+  try {
+    const s = await api('/api/stats');
+    $('#stBatches').textContent = '批次 ' + s.batches;
+    $('#stTimeout').textContent = '超时 ' + s.timeout_batches;
+    $('#stExc').textContent = '待处理异常 ' + s.open_exceptions;
+    $('#stReports').textContent = '报告 ' + s.reports;
+  } catch (e) {}
+}
+
+function fillSample() {
+  $('#csvText').value = [
+    'plate_no,vin,result,org_code,inspection_date',
+    '京A12345,LFV2A21K8C3000001,合格,JG1001,2026-09-20',
+    '沪B67890,LSGKB54E1HA000002,不合格,JG1002,2026-09-21',
+    '粤C24680,LGBH52E07NY000003,合格,JG1001,2026-09-22',
+    '川A13579,LS5A3AJD8EA000004,合格,JG9999,2026-09-22',
+    'bad-plate,SHORTVIN,合格,JG1001,2026-09-22'
+  ].join('\n');
+}
+
+$('#csvFile').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => $('#csvText').value = rd.result;
+  rd.readAsText(f, 'utf-8');
+};
+
+async function importCsv() {
+  try {
+    const r = await api('/api/batches/import', {method: 'POST', body: $('#csvText').value});
+    showMsg($('#importMsg'), `导入成功：批次 ${r.batch_no}，共 ${r.total} 条。请到「批次管理」提交。`, true);
+    refreshStats();
+  } catch (e) { showMsg($('#importMsg'), '导入失败：' + e.message, false); }
+}
+
+async function loadBatches() {
+  const rows = await api('/api/batches');
+  $('#batchTable tbody').innerHTML = rows.map(b => `<tr>
+    <td>${b.id}</td><td>${b.batch_no}</td><td>${tag(b.status)}</td>
+    <td>${b.total_count}</td><td>${b.success_count}</td><td>${b.fail_count}</td>
+    <td>${b.pending_count}</td><td>${b.retry_count}</td><td>${b.created_at}</td>
+    <td>
+      ${b.pending_count > 0 && b.status !== 'TIMEOUT' ? `<button class="btn small" onclick="submitBatch(${b.id},false)">提交</button>` : ''}
+      ${['TIMEOUT','PARTIAL','FAILED'].includes(b.status) && b.pending_count > 0 ? `<button class="btn small warn" onclick="submitBatch(${b.id},true)">重试</button>` : ''}
+      <button class="btn small gray" onclick="loadRecords(${b.id},'${b.batch_no}')">明细</button>
+    </td></tr>`).join('');
+  refreshStats();
+}
+
+async function submitBatch(id, isRetry) {
+  try {
+    const r = await api(`/api/batches/${id}/${isRetry ? 'retry' : 'submit'}`, {method: 'POST'});
+    alert(`批次 ${r.batch_no}：${r.status}\n成功 ${r.success} / 失败 ${r.failed} / 待提交 ${r.pending}\n${r.message}`);
+  } catch (e) { alert('操作失败：' + e.message); }
+  loadBatches();
+}
+
+async function loadRecords(id, no) {
+  const rows = await api(`/api/batches/${id}/records`);
+  $('#recordCard').style.display = 'block';
+  $('#recordTitle').textContent = `批清明细 - ${no}`;
+  $('#recordTable tbody').innerHTML = rows.map(r => `<tr>
+    <td>${r.id}</td><td>${r.plate_no}</td><td>${r.vin}</td><td>${r.result}</td>
+    <td>${r.org_code}</td><td>${r.inspection_date}</td><td>${tag(r.status)}</td>
+    <td>${r.error_message || ''}</td></tr>`).join('');
+}
+
+async function loadExceptions() {
+  const onlyOpen = $('#onlyOpen').checked;
+  const rows = await api('/api/exceptions' + (onlyOpen ? '?status=OPEN' : ''));
+  $('#excTable tbody').innerHTML = rows.map(e => `<tr>
+    <td>${e.id}</td><td>${tag(e.error_type)}</td><td>${e.batch_no || ''}</td>
+    <td>${e.plate_no || ''}</td><td>${e.vin || ''}</td><td>${e.error_message}</td>
+    <td>${tag(e.status)}</td><td>${e.created_at}</td>
+    <td>${e.status === 'OPEN' ? `<button class="btn small" onclick="resolveExc(${e.id})">标记处理</button>` : ''}</td>
+  </tr>`).join('');
+  refreshStats();
+}
+
+async function resolveExc(id) {
+  try { await api(`/api/exceptions/${id}/resolve`, {method: 'POST'}); } catch (e) { alert(e.message); }
+  loadExceptions();
+}
+
+async function genReport() {
+  const d = $('#reportDate').value;
+  try {
+    const r = await api('/api/reports/generate', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(d ? {date: d} : {})});
+    showMsg($('#reportMsg'), `已生成并持久化 ${r.written} 条汇总（${r.date}）`, true);
+  } catch (e) { showMsg($('#reportMsg'), '生成失败：' + e.message, false); }
+  loadReports();
+}
+
+async function loadReports() {
+  const rows = await api('/api/reports');
+  $('#reportTable tbody').innerHTML = rows.map(r => `<tr>
+    <td>${r.id}</td><td>${r.report_type}</td><td>${r.report_key}</td>
+    <td>${r.report_date || ''}</td><td>${r.org_code || ''}</td>
+    <td>${r.total_records}</td><td>${r.success_records}</td><td>${r.failed_records}</td>
+    <td>${r.exception_count}</td><td>${r.updated_at}</td></tr>`).join('');
+  refreshStats();
+}
+
+refreshStats();
+</script>
+</body>
+</html>
